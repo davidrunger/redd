@@ -83,9 +83,26 @@ module Redd
     # @return [HTTP::Connection] the base connection object
     def connection
       # TODO: Make timeouts configurable
-      @connection ||= HTTP.persistent(@endpoint)
-                          .headers('User-Agent' => @user_agent)
-                          .timeout(:per_operation, write: 5, connect: 5, read: 5)
+      @connection ||=
+        begin
+          if ENV.key?('DEBUG_REDD_HTTP')
+            ActiveSupport::Notifications.subscribe(
+              'start_request.http',
+            ) do |_name, _start, _finish, _id, payload|
+                pp(uri: payload[:request].uri.to_s)
+            end
+
+            http =
+              HTTP.use(instrumentation: {
+                instrumenter: ActiveSupport::Notifications.instrumenter,
+              })
+          end
+
+          (http || HTTP).
+            persistent(@endpoint).
+            headers('User-Agent' => @user_agent).
+            timeout(write: 5, connect: 5, read: 5)
+        end
     end
   end
 end
